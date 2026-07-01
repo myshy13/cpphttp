@@ -113,7 +113,7 @@ void Server::staticDir(std::string prefix, std::string path) {
   staticDirs.push_back({prefix, path});
 }
 
-void Server::listen() {
+void Server::listen(std::function<void()> callback) {
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
   if (server_fd < 0) {
@@ -139,7 +139,7 @@ void Server::listen() {
     return;
   }
 
-  std::cout << "Listening on http://localhost:" << port << "\n";
+  callback();
 
   while (true) {
     int client_fd = accept(server_fd, nullptr, nullptr);
@@ -178,6 +178,28 @@ void Server::use(
 void Server::handleConnection(const std::string &raw, int client_fd) {
   Request req = parseRequest(raw);
   Response res;
+
+  std::string clientIp = "unknown";
+  sockaddr_in peerAddr{};
+  socklen_t peerLen = sizeof(peerAddr);
+
+  if (getpeername(client_fd, reinterpret_cast<sockaddr *>(&peerAddr),
+                  &peerLen) == 0) {
+    char ipBuffer[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &peerAddr.sin_addr, ipBuffer, sizeof(ipBuffer))) {
+      clientIp = ipBuffer;
+    }
+  }
+
+  if (auto forwardedIt = req.headers.find("X-Forwarded-For");
+      forwardedIt != req.headers.end() && !forwardedIt->second.empty()) {
+    clientIp = forwardedIt->second;
+    if (auto commaPos = clientIp.find(','); commaPos != std::string::npos) {
+      clientIp = clientIp.substr(0, commaPos);
+    }
+  }
+
+  req.ip = clientIp;
 
   bool matched = false;
   bool handlerInvoked = false;
@@ -274,9 +296,6 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
     headers += value;
     headers += "\r\n";
   }
-
-  std::cout << "headers:";
-  std::cout << headers;
 
   std::string response = "HTTP/1.1 " + std::to_string(res.statusCode) +
                          " OK\r\n"

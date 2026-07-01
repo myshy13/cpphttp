@@ -1,6 +1,3 @@
-New request: GET /logs Response: 200
-New request: GET /logs Response: 200
-New request: GET /logs Response: 200
-New request: GET /logs Response: 200
-New request: GET /logs Response: 200
-New request: GET /logs Response: 200
+New request: GET / Response: 200
+New request: GET / Response: 200
+New request: GET / Response: 200

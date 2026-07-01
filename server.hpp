@@ -37,6 +37,7 @@ struct Request {
   std::string path;
   std::string version;
   std::unordered_map<std::string, std::string> headers;
+  std::string ip;
 };
 
 std::string contentTypeFromExtension(const std::string &filename);
@@ -87,7 +88,7 @@ struct Server {
   void get(std::string path, Handler handler);
   void post(std::string path, Handler handler);
   void staticDir(std::string prefix, std::string path);
-  void listen();
+  void listen(std::function<void()> callback);
   void use(std::string prefix, Method allowedMethods,
            std::function<void(Request &, Response &, NextHandler)> handle);
 
