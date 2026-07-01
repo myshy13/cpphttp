@@ -15,7 +15,7 @@ Here is a boilerplate/ example file to get started.
 #include <iostream>
 
 int main() {
-  Server app = httpserver::createServer(8080); // Create a server on port 8080
+  Server app = server::createServer(8080); // Create a server on port 8080
   if (app.port == -1) {
     std::cerr << "Error binding to port\n"; // error if the port is already in use or if the port is invalid
     return 1;
