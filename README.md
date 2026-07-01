@@ -36,9 +36,11 @@ int main() {
 
 ## Requirements
 
-| Name                 |                |
-| -------------------- | -------------- |
-| c++ version          | >C++17         |
-| recommended compiler | clang++ or g++ |
+| Requirement | version        |
+| ----------- | -------------- |
+| c++ version | >C++17         |
+| compiler    | clang++ or g++ |
+
+You can use other compilers, but clang and g are the recommended compilers for this library.
 
 > 💡 **Tip:** \*If you are using the recommended compilers, you can use the following argument to tell the compiler to use C++17: `-std=c++17`\*
