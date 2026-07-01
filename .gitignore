@@ -1,2 +1,4 @@
-.vscode
-*/build
+# User and editor files
+.vscode/
+*.swp
+.DS_Store
