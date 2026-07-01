@@ -1,5 +1,9 @@
 # cpphttp
 
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/myshy13/cpphttp)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B&logoColor=white)
+![Express Inspired](https://img.shields.io/badge/inspired%20by-ExpressJS-black?logo=express)
+
 A simple and easy-to-use HTTP server inspired by Express.js
 
 ## Installation
@@ -32,7 +36,9 @@ int main() {
 
 ## Requirements
 
-| Name         |                |
-| ------------ | -------------- |
-| c++ version  |                |
-| c++ compiler | clang++ or g++ |
+| Name                 |                |
+| -------------------- | -------------- |
+| c++ version          | >C++17         |
+| recommended compiler | clang++ or g++ |
+
+> 💡 **Tip:** \*If you are using the recommended compilers, you can use the following argument to tell the compiler to use C++17: `-std=c++17`\*
