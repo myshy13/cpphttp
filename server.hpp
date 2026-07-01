@@ -23,7 +23,7 @@ extern std::ofstream logFile;
 
 constexpr int BUFFER_SIZE = 30720;
 
-enum class Method { GET, POST, PATCH, DELETE, HEAD, OPTIONS, ALL };
+enum class Method { GET, POST, PATCH, DELETE, HEAD, OPTIONS, PUT, ALL };
 
 std::optional<Method> stringToMethod(const std::string &s);
 
@@ -81,12 +81,18 @@ struct Middleware {
 
 struct Server {
   int port;
+  bool logsEnabled = true;
   std::vector<Route> routes;
   std::vector<Directory> staticDirs;
   std::vector<Middleware> middlewares;
 
   void get(std::string path, Handler handler);
   void post(std::string path, Handler handler);
+  void patch(std::string path, Handler handler);
+  void delete_(std::string path, Handler handler);
+  void put(std::string path, Handler handler);
+  void head(std::string path, Handler handler);
+  void options(std::string path, Handler handler);
   void staticDir(std::string prefix, std::string path);
   void listen(std::function<void()> callback);
   void use(std::string prefix, Method allowedMethods,

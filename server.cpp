@@ -3,10 +3,10 @@
 std::ofstream logFile("log.txt");
 
 namespace server {
-  std::vector<int> activePorts;
+std::vector<int> activePorts;
 }
 
-std::optional<Method> stringToMethod(const std::string &s) {
+std::optional<Method> stringToMethod(const std::string& s) {
   static const std::unordered_map<std::string, Method> table = {
       {"GET", Method::GET},     {"POST", Method::POST},
       {"PATCH", Method::PATCH}, {"DELETE", Method::DELETE},
@@ -14,13 +14,12 @@ std::optional<Method> stringToMethod(const std::string &s) {
   };
 
   auto it = table.find(s);
-  if (it == table.end())
-    return std::nullopt;
+  if (it == table.end()) return std::nullopt;
 
   return it->second;
 }
 
-std::string contentTypeFromExtension(const std::string &filename) {
+std::string contentTypeFromExtension(const std::string& filename) {
   static const std::unordered_map<std::string, std::string> mimeTypes = {
       {".html", "text/html"},        {".htm", "text/html"},
       {".css", "text/css"},          {".js", "application/javascript"},
@@ -37,28 +36,27 @@ std::string contentTypeFromExtension(const std::string &filename) {
   std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
   auto it = mimeTypes.find(ext);
-  if (it != mimeTypes.end())
-    return it->second;
+  if (it != mimeTypes.end()) return it->second;
 
   return {};
 }
 
-Response &Response::status(int code) {
+Response& Response::status(int code) {
   statusCode = code;
   return *this;
 }
 
-Response &Response::setHeader(std::string key, std::string value) {
+Response& Response::setHeader(std::string key, std::string value) {
   headers[key] = value;
   return *this;
 }
 
-Response &Response::send(const std::string &text) {
+Response& Response::send(const std::string& text) {
   body = text;
   return *this;
 }
 
-Response &Response::sendFile(const std::string &filename) {
+Response& Response::sendFile(const std::string& filename) {
   std::ifstream file(filename);
 
   if (file.is_open()) {
@@ -72,7 +70,7 @@ Response &Response::sendFile(const std::string &filename) {
   return *this;
 }
 
-Request parseRequest(const std::string &raw) {
+Request parseRequest(const std::string& raw) {
   Request req;
 
   std::istringstream stream(raw);
@@ -86,14 +84,12 @@ Request parseRequest(const std::string &raw) {
   while (std::getline(stream, line) && line != "\r" && !line.empty()) {
     auto colon = line.find(':');
 
-    if (colon == std::string::npos)
-      continue;
+    if (colon == std::string::npos) continue;
 
     std::string key = line.substr(0, colon);
     std::string value = line.substr(colon + 2);
 
-    if (!value.empty() && value.back() == '\r')
-      value.pop_back();
+    if (!value.empty() && value.back() == '\r') value.pop_back();
 
     req.headers[key] = value;
   }
@@ -107,6 +103,26 @@ void Server::get(std::string path, Handler handler) {
 
 void Server::post(std::string path, Handler handler) {
   routes.push_back({Method::POST, path, handler});
+}
+
+void Server::patch(std::string path, Handler handler) {
+  routes.push_back({Method::PATCH, path, handler});
+}
+
+void Server::delete_(std::string path, Handler handler) {
+  routes.push_back({Method::DELETE, path, handler});
+}
+
+void Server::put(std::string path, Handler handler) {
+  routes.push_back({Method::PUT, path, handler});
+}
+
+void Server::head(std::string path, Handler handler) {
+  routes.push_back({Method::HEAD, path, handler});
+}
+
+void Server::options(std::string path, Handler handler) {
+  routes.push_back({Method::OPTIONS, path, handler});
 }
 
 void Server::staticDir(std::string prefix, std::string path) {
@@ -129,7 +145,7 @@ void Server::listen(std::function<void()> callback) {
   addr.sin_addr.s_addr = INADDR_ANY;
   addr.sin_port = htons(port);
 
-  if (bind(server_fd, (sockaddr *)&addr, sizeof(addr)) < 0) {
+  if (bind(server_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
     perror("bind");
     return;
   }
@@ -164,9 +180,8 @@ void Server::listen(std::function<void()> callback) {
   close(server_fd);
 }
 
-void Server::use(
-    std::string prefix, Method allowedMethods,
-    std::function<void(Request &, Response &, NextHandler)> handle) {
+void Server::use(std::string prefix, Method allowedMethods,
+                 std::function<void(Request&, Response&, NextHandler)> handle) {
   Middleware middleware;
   middleware.prefix = prefix;
   middleware.allowedMethods = allowedMethods;
@@ -175,7 +190,7 @@ void Server::use(
   this->middlewares.push_back(middleware);
 }
 
-void Server::handleConnection(const std::string &raw, int client_fd) {
+void Server::handleConnection(const std::string& raw, int client_fd) {
   Request req = parseRequest(raw);
   Response res;
 
@@ -183,7 +198,7 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
   sockaddr_in peerAddr{};
   socklen_t peerLen = sizeof(peerAddr);
 
-  if (getpeername(client_fd, reinterpret_cast<sockaddr *>(&peerAddr),
+  if (getpeername(client_fd, reinterpret_cast<sockaddr*>(&peerAddr),
                   &peerLen) == 0) {
     char ipBuffer[INET_ADDRSTRLEN];
     if (inet_ntop(AF_INET, &peerAddr.sin_addr, ipBuffer, sizeof(ipBuffer))) {
@@ -204,10 +219,10 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
   bool matched = false;
   bool handlerInvoked = false;
 
-  auto dispatchRequest = [&](Request &req, Response &res) {
+  auto dispatchRequest = [&](Request& req, Response& res) {
     handlerInvoked = true;
 
-    for (auto &route : routes) {
+    for (auto& route : routes) {
       if (route.path == req.path &&
           route.method == stringToMethod(req.method)) {
         route.handler(req, res);
@@ -216,11 +231,11 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
       }
     }
 
-    for (auto &dir : staticDirs) {
+    for (auto& dir : staticDirs) {
       if (req.path.find(dir.prefix) == 0) {
         try {
           if (fs::exists(dir.path) && fs::is_directory(dir.path)) {
-            for (const auto &entry : fs::directory_iterator(dir.path)) {
+            for (const auto& entry : fs::directory_iterator(dir.path)) {
               std::string entryname = fs::path(entry.path().filename().string())
                                           .filename()
                                           .string();
@@ -244,7 +259,7 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
           } else {
             std::cerr << "Path does not exist or is not a directory.\n";
           }
-        } catch (const fs::filesystem_error &e) {
+        } catch (const fs::filesystem_error& e) {
           std::cerr << "Error: " << e.what() << "\n";
         }
 
@@ -255,7 +270,7 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
 
   std::vector<std::reference_wrapper<const Middleware>> activeMiddlewares;
 
-  for (const auto &middleware : middlewares) {
+  for (const auto& middleware : middlewares) {
     if (req.path.find(middleware.prefix) == 0 &&
         (middleware.allowedMethods == Method::ALL ||
          middleware.allowedMethods == stringToMethod(req.method))) {
@@ -263,15 +278,15 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
     }
   }
 
-  std::function<void(size_t, Request &, Response &)> runMiddlewares;
-  runMiddlewares = [&](size_t index, Request &req, Response &res) {
+  std::function<void(size_t, Request&, Response&)> runMiddlewares;
+  runMiddlewares = [&](size_t index, Request& req, Response& res) {
     if (index >= activeMiddlewares.size()) {
       dispatchRequest(req, res);
       return;
     }
 
-    const Middleware &middleware = activeMiddlewares[index].get();
-    middleware.handle(req, res, [&](Request &req, Response &res) {
+    const Middleware& middleware = activeMiddlewares[index].get();
+    middleware.handle(req, res, [&](Request& req, Response& res) {
       runMiddlewares(index + 1, req, res);
     });
   };
@@ -282,7 +297,9 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
     runMiddlewares(0, req, res);
   }
 
-  logFile << "New request: " << req.method << " " << req.path;
+  if (logsEnabled) {
+    logFile << "New request: " << req.method << " " << req.path;
+  }
 
   if (!matched) {
     res.status(404).send("Not Found");
@@ -290,7 +307,7 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
 
   std::string headers;
 
-  for (const auto &[key, value] : res.headers) {
+  for (const auto& [key, value] : res.headers) {
     headers += key;
     headers += ": ";
     headers += value;
@@ -305,25 +322,27 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
 
   send(client_fd, response.c_str(), response.size(), 0);
 
-  logFile << " Response: ";
-  logFile << res.statusCode << "\n";
-  logFile.flush();
+  if (logsEnabled) {
+    logFile << " Response: ";
+    logFile << res.statusCode << "\n";
+    logFile.flush();
+  }
 }
 
 namespace server {
 
-  Server createServer(int port) {
-    if (port > 65535) {
-      std::cerr << "Error: port too high\n";
-      return {-1, {}};
-    }
-
-    if (port <= 0) {
-      std::cerr << "Error: port too low\n";
-      return {-1, {}};
-    }
-
-    return {port, {}};
+Server createServer(int port) {
+  if (port > 65535) {
+    std::cerr << "Error: port too high\n";
+    return {-1, {}};
   }
 
-} // namespace server
+  if (port <= 0) {
+    std::cerr << "Error: port too low\n";
+    return {-1, {}};
+  }
+
+  return {port, {}};
+}
+
+}  // namespace server

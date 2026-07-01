@@ -1,3 +1,0 @@
-New request: GET / Response: 200
-New request: GET / Response: 200
-New request: GET / Response: 200

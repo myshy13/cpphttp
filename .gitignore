@@ -3,5 +3,12 @@
 *.swp
 .DS_Store
 
+# build files
+out
+server
+!server.cpp
+!server.hpp
+!example.cpp
+
 # logs
 log.txt
