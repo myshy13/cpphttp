@@ -82,11 +82,14 @@ struct Server {
   int port;
   std::vector<Route> routes;
   std::vector<Directory> staticDirs;
+  std::vector<Middleware> middlewares;
 
   void get(std::string path, Handler handler);
   void post(std::string path, Handler handler);
   void staticDir(std::string prefix, std::string path);
   void listen();
+  void use(std::string prefix, Method allowedMethods,
+           std::function<void(Request &, Response &, NextHandler)> handle);
 
 private:
   void handleConnection(const std::string &raw, int client_fd);
