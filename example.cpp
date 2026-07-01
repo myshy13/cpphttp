@@ -13,8 +13,10 @@ int main() {
     res.status(200).sendFile("log.txt");
   });
 
-  app.staticDir("/src", "src");
-  app.staticDir("/", "public");
+  app.use("/", Method::ALL, [](Request &req, Response &res, NextHandler next) {
+    std::cout << "Middleware: " << req.method << " " << req.path << "\n";
+    next(req, res);
+  });
 
   app.listen();
 }

@@ -164,65 +164,100 @@ void Server::listen() {
   close(server_fd);
 }
 
+void Server::use(
+    std::string prefix, Method allowedMethods,
+    std::function<void(Request &, Response &, NextHandler)> handle) {
+  Middleware middleware;
+  middleware.prefix = prefix;
+  middleware.allowedMethods = allowedMethods;
+  middleware.handle = handle;
+
+  this->middlewares.push_back(middleware);
+}
+
 void Server::handleConnection(const std::string &raw, int client_fd) {
   Request req = parseRequest(raw);
   Response res;
 
   bool matched = false;
+  bool handlerInvoked = false;
 
-  for (auto &route : routes) {
-    if (route.path == req.path && route.method == stringToMethod(req.method)) {
-      route.handler(req, res);
-      matched = true;
-      break;
+  auto dispatchRequest = [&](Request &req, Response &res) {
+    handlerInvoked = true;
+
+    for (auto &route : routes) {
+      if (route.path == req.path &&
+          route.method == stringToMethod(req.method)) {
+        route.handler(req, res);
+        matched = true;
+        return;
+      }
+    }
+
+    for (auto &dir : staticDirs) {
+      if (req.path.find(dir.prefix) == 0) {
+        try {
+          if (fs::exists(dir.path) && fs::is_directory(dir.path)) {
+            for (const auto &entry : fs::directory_iterator(dir.path)) {
+              std::string entryname = fs::path(entry.path().filename().string())
+                                          .filename()
+                                          .string();
+              std::string requestfile = fs::path(req.path).filename().string();
+
+              if (entryname == requestfile) {
+                std::string filepath = entry.path().string();
+
+                if (fs::is_regular_file(filepath)) {
+                  res.headers["Content-Type"] =
+                      contentTypeFromExtension(filepath);
+                  res.sendFile(filepath);
+                  matched = true;
+                } else {
+                  res.status(500).send("Internal Server Error");
+                }
+
+                break;
+              }
+            }
+          } else {
+            std::cerr << "Path does not exist or is not a directory.\n";
+          }
+        } catch (const fs::filesystem_error &e) {
+          std::cerr << "Error: " << e.what() << "\n";
+        }
+
+        break;
+      }
+    }
+  };
+
+  std::vector<std::reference_wrapper<const Middleware>> activeMiddlewares;
+
+  for (const auto &middleware : middlewares) {
+    if (req.path.find(middleware.prefix) == 0 &&
+        (middleware.allowedMethods == Method::ALL ||
+         middleware.allowedMethods == stringToMethod(req.method))) {
+      activeMiddlewares.push_back(std::cref(middleware));
     }
   }
 
-  for (auto &dir : staticDirs) {
-    if (req.path.find(dir.prefix) == 0) {
-      try {
-        if (fs::exists(dir.path) && fs::is_directory(dir.path)) {
-
-          for (const auto &entry : fs::directory_iterator(dir.path)) {
-
-            std::string entryname =
-                fs::path(entry.path().filename().string()).filename().string();
-
-            std::string requestfile = fs::path(req.path).filename().string();
-
-            if (entryname == requestfile) {
-
-              std::string filepath = entry.path().string();
-
-              if (fs::is_regular_file(filepath)) {
-
-                res.headers["Content-Type"] =
-                    contentTypeFromExtension(filepath);
-
-                res.sendFile(filepath);
-                matched = true;
-
-              } else {
-
-                res.status(500).send("Internal Server Error");
-              }
-
-              break;
-            }
-          }
-
-        } else {
-
-          std::cerr << "Path does not exist or is not a directory.\n";
-        }
-
-      } catch (const fs::filesystem_error &e) {
-
-        std::cerr << "Error: " << e.what() << "\n";
-      }
-
-      break;
+  std::function<void(size_t, Request &, Response &)> runMiddlewares;
+  runMiddlewares = [&](size_t index, Request &req, Response &res) {
+    if (index >= activeMiddlewares.size()) {
+      dispatchRequest(req, res);
+      return;
     }
+
+    const Middleware &middleware = activeMiddlewares[index].get();
+    middleware.handle(req, res, [&](Request &req, Response &res) {
+      runMiddlewares(index + 1, req, res);
+    });
+  };
+
+  if (activeMiddlewares.empty()) {
+    dispatchRequest(req, res);
+  } else {
+    runMiddlewares(0, req, res);
   }
 
   logFile << "New request: " << req.method << " " << req.path;
