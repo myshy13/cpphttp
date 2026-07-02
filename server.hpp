@@ -79,12 +79,19 @@ struct Middleware {
   std::function<void(Request &, Response &, NextHandler)> handle;
 };
 
+struct Cors {
+  std::string allowedOrigins = "*";
+  Method allowedMethods = Method::ALL;
+  std::string prefix = "/";
+};
+
 struct Server {
   int port;
   bool logsEnabled = true;
   std::vector<Route> routes;
   std::vector<Directory> staticDirs;
   std::vector<Middleware> middlewares;
+  std::vector<Cors> corsOptions;
 
   void get(std::string path, Handler handler);
   void post(std::string path, Handler handler);
@@ -97,6 +104,8 @@ struct Server {
   void listen(std::function<void()> callback);
   void use(std::string prefix, Method allowedMethods,
            std::function<void(Request &, Response &, NextHandler)> handle);
+  void cors(std::string prefix = "/", std::string allowedOrigins = "*", Method allowedMethods = Method::ALL);
+
 
 private:
   void handleConnection(const std::string &raw, int client_fd);

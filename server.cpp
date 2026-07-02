@@ -19,6 +19,29 @@ std::optional<Method> stringToMethod(const std::string& s) {
   return it->second;
 }
 
+std::string methodToString(Method method) {
+  switch (method) {
+    case Method::GET:
+      return "GET";
+    case Method::POST:
+      return "POST";
+    case Method::PATCH:
+      return "PATCH";
+    case Method::DELETE:
+      return "DELETE";
+    case Method::HEAD:
+      return "HEAD";
+    case Method::OPTIONS:
+      return "OPTIONS";
+    case Method::PUT:
+      return "PUT";
+    case Method::ALL:
+      return "GET, POST, PATCH, DELETE, HEAD, OPTIONS, PUT";
+  }
+
+  return {};
+}
+
 std::string contentTypeFromExtension(const std::string& filename) {
   static const std::unordered_map<std::string, std::string> mimeTypes = {
       {".html", "text/html"},        {".htm", "text/html"},
@@ -127,6 +150,10 @@ void Server::options(std::string path, Handler handler) {
 
 void Server::staticDir(std::string prefix, std::string path) {
   staticDirs.push_back({prefix, path});
+}
+
+void Server::cors(std::string prefix = "/", std::string allowedOrigins = "*", Method allowedMethods = Method::ALL) {
+  corsOptions.push_back({allowedOrigins, allowedMethods});
 }
 
 void Server::listen(std::function<void()> callback) {
@@ -313,6 +340,22 @@ void Server::handleConnection(const std::string& raw, int client_fd) {
     headers += value;
     headers += "\r\n";
   }
+
+  for (auto& cors : corsOptions) {
+    if (req.path.find(cors.prefix) == 0) {
+      res.headers["Access-Control-Allow-Origin"] = cors.allowedOrigins;
+      res.headers["Access-Control-Allow-Methods"] = methodToString(cors.allowedMethods);
+    }
+  }
+
+  for (auto& route : routes) {
+      if (route.path == req.path &&
+          route.method == stringToMethod(req.method)) {
+        route.handler(req, res);
+        matched = true;
+        return;
+      }
+    }
 
   std::string response = "HTTP/1.1 " + std::to_string(res.statusCode) +
                          " OK\r\n"
