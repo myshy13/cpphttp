@@ -330,12 +330,25 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
     runMiddlewares(0, req, res);
   }
 
+  std::mutex logMutex;
+
   if (logsEnabled) {
+    std::lock_guard<std::mutex> lock(logMutex);
     logFile << "New request: " << req.method << " " << req.path;
+    logFile << " Response: " << res.statusCode << "\n";
+    logFile.flush();
   }
 
   if (!matched) {
     res.status(404).send("Not Found");
+  }
+
+  for (auto &cors : corsOptions) {
+    if (req.path.find(cors.prefix) == 0) {
+      res.headers["Access-Control-Allow-Origin"] = cors.allowedOrigins;
+      res.headers["Access-Control-Allow-Methods"] =
+          methodToString(cors.allowedMethods);
+    }
   }
 
   std::string headers;
@@ -347,22 +360,6 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
     headers += "\r\n";
   }
 
-  for (auto &cors : corsOptions) {
-    if (req.path.find(cors.prefix) == 0) {
-      res.headers["Access-Control-Allow-Origin"] = cors.allowedOrigins;
-      res.headers["Access-Control-Allow-Methods"] =
-          methodToString(cors.allowedMethods);
-    }
-  }
-
-  for (auto &route : routes) {
-    if (route.path == req.path && route.method == stringToMethod(req.method)) {
-      route.handler(req, res);
-      matched = true;
-      return;
-    }
-  }
-
   std::string response = "HTTP/1.1 " + std::to_string(res.statusCode) +
                          " OK\r\n"
                          "Content-Length: " +
@@ -370,17 +367,11 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
                          "Connection: close\r\n\r\n" + res.body;
 
   send(client_fd, response.c_str(), response.size(), 0);
-
-  if (logsEnabled) {
-    logFile << " Response: ";
-    logFile << res.statusCode << "\n";
-    logFile.flush();
-  }
 }
 
 namespace server {
 
-  Server createServer(int port) {
+  Server createServer(int port, bool logsEnabled) {
     if (port > 65535) {
       std::cerr << "Error: port too high\n";
       return {-1, {}};
@@ -391,7 +382,7 @@ namespace server {
       return {-1, {}};
     }
 
-    return {port, {}};
+    return {.port = port, .logsEnabled = logsEnabled};
   }
 
 } // namespace server
