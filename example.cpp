@@ -20,6 +20,7 @@ int main() {
   });
 
   app.listen([]() {
-    std::cout << "Listening on http://localhost:" << port << "\n";
+    std::cout << "Listening on http://localhost:";
+    std::cout << port << "\n";
   });
 }
