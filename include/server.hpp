@@ -1,21 +1,40 @@
 #ifndef MYSHY13_HTTPSERVER
 #define MYSHY13_HTTPSERVER
 
+#include "nlohmann/json.hpp"
+#include "threadpool.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
+#include <condition_variable>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <netinet/in.h>
 #include <optional>
+#include <queue>
 #include <sstream>
 #include <string>
 #include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+
+inline std::string getStatusPhrase(int code) {
+  switch (code) {
+  case 200:
+    return "OK";
+  case 404:
+    return "Not Found";
+  case 500:
+    return "Internal Server Error";
+  default:
+    return "OK";
+  }
+}
 
 namespace fs = std::filesystem;
 
@@ -32,12 +51,21 @@ struct Path {
   std::string path;
 };
 
+enum class ContentType { Text, Json, UrlEncoded, Binary };
+
+using FormData = std::unordered_map<std::string, std::string>;
+
 struct Request {
   std::string method;
   std::string path;
   std::string version;
   std::unordered_map<std::string, std::string> headers;
   std::string ip;
+  ContentType contentType;
+  std::variant<std::string, std::vector<uint8_t>, nlohmann::json, FormData,
+               const char *>
+      body;
+  int contentLength = 0;
 };
 
 std::string contentTypeFromExtension(const std::string &filename);
@@ -87,11 +115,14 @@ struct Cors {
 
 struct Server {
   int port;
-  bool logsEnabled = true;
+  bool logsEnabled = false;
   std::vector<Route> routes;
   std::vector<Directory> staticDirs;
   std::vector<Middleware> middlewares;
   std::vector<Cors> corsOptions;
+
+  Server(int port = 0, bool logsEnabled = false)
+      : port(port), logsEnabled(logsEnabled) {}
 
   void get(std::string path, Handler handler);
   void post(std::string path, Handler handler);
@@ -104,18 +135,19 @@ struct Server {
   void listen(std::function<void()> callback);
   void use(std::string prefix, Method allowedMethods,
            std::function<void(Request &, Response &, NextHandler)> handle);
-  void cors(std::string prefix = "/", std::string allowedOrigins = "*", Method allowedMethods = Method::ALL);
-
+  void cors(std::string prefix = "/", std::string allowedOrigins = "*",
+            Method allowedMethods = Method::ALL);
 
 private:
   void handleConnection(const std::string &raw, int client_fd);
+  ThreadPool pool{4};
 };
 
 namespace server {
 
   extern std::vector<int> activePorts;
 
-  Server createServer(int port);
+  Server createServer(int port, bool logsEnabled = false);
 
 }
 

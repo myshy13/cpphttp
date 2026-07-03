@@ -18,20 +18,33 @@ Here is a boilerplate/ example file to get started.
 #include "server.hpp"
 #include <iostream>
 
+using json = nlohmann::json;
+
+void middleware(Request &req, Response &res, NextHandler next) {
+  std::cout << "Middleware: " << req.method << " " << req.path << "\n";
+  next(req, res);
+}
+
 int main() {
-  Server app = server::createServer(8080); // Create a server on port 8080
+  const int port = 8080;
+  Server app = server::createServer(port, false);
   if (app.port == -1) {
-    std::cerr << "Error binding to port\n"; // error if the port is already in use or if the port is invalid
+    std::cerr << "Error binding to port\n";
     return 1;
   }
 
   app.get("/", [](Request &req, Response &res) {
-    res.setHeader("Content-Type", "text/plain"); // Set the response to plaintext
-    res.status(200).sendFile("Hello world"); // send the text "Hello world" to the client
+    res.status(200).send("This is my c++ server!");
   });
 
-  app.listen(); // bind to the port and start listening for requests
+  app.use("/", Method::ALL, middleware);
+
+  app.listen([]() {
+    std::cout << "Listening on http://localhost:";
+    std::cout << port << "\n";
+  });
 }
+
 ```
 
 ## Requirements

@@ -4,11 +4,11 @@
 .DS_Store
 
 # build files
-out
-server
-!server.cpp
-!server.hpp
-!example.cpp
+build/
 
 # logs
 log.txt
+
+# Not files
+!src
+!include
