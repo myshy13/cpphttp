@@ -1,7 +1,6 @@
 #ifndef MYSHY13_HTTPSERVER
 #define MYSHY13_HTTPSERVER
 
-#include "nlohmann/json.hpp"
 #include "threadpool.hpp"
 
 #include <arpa/inet.h>
@@ -19,8 +18,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <unordered_map>
-#include <variant>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 struct Server;
 

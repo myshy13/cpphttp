@@ -12,4 +12,9 @@ set(SOURCE_FILES
 
 add_executable(cpphttp ${SOURCE_FILES})
 
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(cpphttp PRIVATE nlohmann_json::nlohmann_json)
+
+target_include_directories(cpphttp PRIVATE /opt/homebrew/include)
+
 target_include_directories(cpphttp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
