@@ -1,27 +1,20 @@
 #include "server.hpp"
 
-#include <array>
-#include <cerrno>
-
-std::ofstream logFile;
-
-std::mutex logMutex;
 namespace server {
   std::vector<int> activePorts;
 }
 
-std::optional<Method> stringToMethod(const std::string &s) {
-  static const std::unordered_map<std::string, Method> table = {
+std::optional<Method> stringToMethod(std::string_view s) {
+  static const std::unordered_map<std::string_view, Method> table = {
       {"GET", Method::GET},     {"POST", Method::POST},
       {"PATCH", Method::PATCH}, {"DELETE", Method::DELETE},
       {"HEAD", Method::HEAD},   {"OPTIONS", Method::OPTIONS},
   };
 
-  auto it = table.find(s);
-  if (it == table.end())
-    return std::nullopt;
-
-  return it->second;
+  if (auto it = table.find(s); it != table.end()) {
+    return it->second;
+  }
+  return std::nullopt;
 }
 
 std::string methodToString(Method method) {
@@ -47,7 +40,7 @@ std::string methodToString(Method method) {
   return {};
 }
 
-std::string contentTypeFromExtension(const std::string &filename) {
+std::string contentTypeFromExtension(const std::string filename) {
   static const std::unordered_map<std::string, std::string> mimeTypes = {
       {".html", "text/html"},        {".htm", "text/html"},
       {".css", "text/css"},          {".js", "application/javascript"},
@@ -80,26 +73,24 @@ Response &Response::setHeader(std::string key, std::string value) {
   return *this;
 }
 
-Response &Response::send(const std::string &text) {
+Response &Response::send(const std::string text) {
   body = text;
   return *this;
 }
 
-Response &Response::sendFile(const std::string &filename) {
+Response &Response::sendFile(const std::string filename) {
   std::ifstream file(filename);
 
   if (file.is_open()) {
     std::stringstream buffer;
     buffer << file.rdbuf();
     body = buffer.str();
-  } else {
-    std::cerr << "Failed to open the file.\n";
   }
 
   return *this;
 }
 
-Request parseRequest(const std::string &raw) {
+Request parseRequest(const std::string raw) {
   Request req;
 
   std::istringstream stream(raw);
@@ -137,80 +128,76 @@ Request parseRequest(const std::string &raw) {
   return req;
 }
 
-void Server::get(std::string path, Handler handler) {
+void Server::get(const std::string path, const Handler handler) {
   routes.push_back({Method::GET, path, handler});
 }
 
-void Server::post(std::string path, Handler handler) {
+void Server::post(const std::string path, const Handler handler) {
   routes.push_back({Method::POST, path, handler});
 }
 
-void Server::patch(std::string path, Handler handler) {
+void Server::patch(const std::string path, const Handler handler) {
   routes.push_back({Method::PATCH, path, handler});
 }
 
-void Server::delete_(std::string path, Handler handler) {
+void Server::delete_(const std::string path, const Handler handler) {
   routes.push_back({Method::DELETE, path, handler});
 }
 
-void Server::put(std::string path, Handler handler) {
+void Server::put(const std::string path, const Handler handler) {
   routes.push_back({Method::PUT, path, handler});
 }
 
-void Server::head(std::string path, Handler handler) {
+void Server::head(const std::string path, const Handler handler) {
   routes.push_back({Method::HEAD, path, handler});
 }
 
-void Server::options(std::string path, Handler handler) {
+void Server::options(const std::string path, const Handler handler) {
   routes.push_back({Method::OPTIONS, path, handler});
 }
 
-void Server::staticDir(std::string prefix, std::string path) {
+void Server::staticDir(const std::string prefix, const std::string path) {
   staticDirs.push_back({prefix, path});
 }
 
-void Server::cors(std::string prefix, std::string allowedOrigins,
+void Server::cors(const std::string prefix, const std::string allowedOrigins,
                   Method allowedMethods) {
-  corsOptions.push_back({allowedOrigins, allowedMethods});
+  corsOptions.push_back({allowedOrigins, allowedMethods, prefix});
 }
 
 void Server::listen(std::function<void()> callback) {
-  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+  server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
 
   if (server_fd < 0) {
-    perror("socket");
     return;
   }
 
   int opt = 1;
-  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+  setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = INADDR_ANY;
   addr.sin_port = htons(port);
 
-  if (bind(server_fd, (sockaddr *)&addr, sizeof(addr)) < 0) {
-    perror("bind");
+  if (bind(server_fd_, (sockaddr *)&addr, sizeof(addr)) < 0) {
     return;
   }
 
-  if (::listen(server_fd, 16) < 0) {
-    perror("listen");
+  if (::listen(server_fd_, 16) < 0) {
     return;
   }
 
   callback();
 
-  while (true) {
-    int client_fd = accept(server_fd, nullptr, nullptr);
+  while (serverRunning) {
+    int client_fd = accept(server_fd_, nullptr, nullptr);
 
     if (client_fd < 0) {
       if (errno == EINTR) {
         continue;
       }
 
-      perror("accept");
       break;
     }
 
@@ -243,11 +230,15 @@ void Server::listen(std::function<void()> callback) {
     });
   }
 
-  close(server_fd);
+  shutdown(server_fd_, SHUT_RDWR);
+  close(server_fd_);
+  for (auto &plugin : plugins) {
+    plugin->onShutdown(*this);
+  }
 }
 
 void Server::use(
-    std::string prefix, Method allowedMethods,
+    const std::string prefix, Method allowedMethods,
     std::function<void(Request &, Response &, NextHandler)> handle) {
   Middleware middleware;
   middleware.prefix = prefix;
@@ -257,7 +248,7 @@ void Server::use(
   this->middlewares.push_back(middleware);
 }
 
-void Server::handleConnection(const std::string &raw, int client_fd) {
+void Server::handleConnection(const std::string raw, int client_fd) {
   Request req = parseRequest(raw);
   Response res;
 
@@ -312,9 +303,9 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
         try {
           nlohmann::json jsonBody = nlohmann::json::parse(bodyStr);
           req.body = jsonBody;
-        } catch (const nlohmann::json::exception &e) {
-          std::cerr << "JSON parse error: " << e.what() << "\n";
+        } catch (const nlohmann::json::exception &err) {
           req.body = std::string("Invalid JSON");
+          std::cerr << "WARNING: " << err.what << std::endl;
         }
       } else if (req.contentType == ContentType::UrlEncoded) {
         // Parse URL encoded form data
@@ -346,6 +337,14 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
   auto dispatchRequest = [&](Request &req, Response &res) {
     handlerInvoked = true;
 
+    for (auto &plugin : plugins) {
+      if (req.path.find(plugin->prefix) == 0 &&
+          (plugin->allowedMethods == Method::ALL ||
+           plugin->allowedMethods == stringToMethod(req.method))) {
+        plugin->onBeforeRequest(req, res);
+      }
+    }
+
     for (auto &route : routes) {
       if (route.path == req.path &&
           route.method == stringToMethod(req.method)) {
@@ -359,32 +358,27 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
       if (req.path.find(dir.prefix) == 0) {
         try {
           if (fs::exists(dir.path) && fs::is_directory(dir.path)) {
-            for (const auto &entry : fs::directory_iterator(dir.path)) {
-              std::string entryname = fs::path(entry.path().filename().string())
-                                          .filename()
-                                          .string();
-              std::string requestfile = fs::path(req.path).filename().string();
+            for (const auto &dir : staticDirs) {
+              if (req.path.find(dir.prefix) == 0) {
+                // Extract relative path safely
+                std::string relPath = req.path.substr(dir.prefix.length());
+                fs::path safePath = fs::path(dir.path) / relPath;
 
-              if (entryname == requestfile) {
-                std::string filepath = entry.path().string();
-
-                if (fs::is_regular_file(filepath)) {
+                if (fs::exists(safePath) && fs::is_regular_file(safePath)) {
                   res.headers["Content-Type"] =
-                      contentTypeFromExtension(filepath);
-                  res.sendFile(filepath);
+                      contentTypeFromExtension(safePath.string());
+                  res.sendFile(safePath.string());
                   matched = true;
                 } else {
-                  res.status(500).send("Internal Server Error");
+                  res.status(404).send("Not Found");
                 }
-
                 break;
               }
             }
-          } else {
-            std::cerr << "Path does not exist or is not a directory.\n";
           }
-        } catch (const fs::filesystem_error &e) {
-          std::cerr << "Error: " << e.what() << "\n";
+        } catch (const fs::filesystem_error &err) {
+          std::cerr << "ERROR: FS filesystem error: ";
+          std::cerr << err.what << std::endl;
         }
 
         break;
@@ -421,11 +415,12 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
     runMiddlewares(0, req, res);
   }
 
-  if (logsEnabled) {
-    std::lock_guard<std::mutex> lock(logMutex);
-    logFile << "New request: " << req.method << " " << req.path;
-    logFile << " Response: " << res.statusCode << "\n";
-    logFile.flush();
+  for (auto &plugin : plugins) {
+    if (req.path.find(plugin->prefix) == 0 &&
+        (plugin->allowedMethods == Method::ALL ||
+         plugin->allowedMethods == stringToMethod(req.method))) {
+      plugin->onAfterRequest(req, res);
+    }
   }
 
   if (!matched) {
@@ -461,25 +456,12 @@ void Server::handleConnection(const std::string &raw, int client_fd) {
 
 namespace server {
 
-  Server createServer(int port, bool logsEnabled) {
-    if (logsEnabled) {
-      logFile.open("server.log", std::ios::app);
-      if (!logFile.is_open()) {
-        std::cerr << "Error opening log file\n";
-        return Server(-1, false);
-      }
-    }
-    if (port > 65535) {
-      std::cerr << "Error: port too high\n";
-      return Server(-1, false);
+  Server createServer(int port) {
+    if (port > 65535 || port <= 0) {
+      return Server(-1);
     }
 
-    if (port <= 0) {
-      std::cerr << "Error: port too low\n";
-      return Server(-1, false);
-    }
-
-    return Server(port, logsEnabled);
+    return Server(port);
   }
 
 } // namespace server

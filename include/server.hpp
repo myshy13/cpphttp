@@ -5,12 +5,16 @@
 #include "threadpool.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
+#include <array>
+#include <atomic>
+#include <cerrno>
 #include <condition_variable>
+#include <csignal>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <iostream>
+#include <memory>
 #include <mutex>
 #include <netinet/in.h>
 #include <optional>
@@ -21,7 +25,14 @@
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
+#include <variant>
 #include <vector>
+
+inline std::atomic<bool> serverRunning{true};
+
+inline void handleSignal(int) { serverRunning = false; }
+
+std::signal(SIGINT, handleSignal);
 
 inline std::string getStatusPhrase(int code) {
   switch (code) {
@@ -38,13 +49,11 @@ inline std::string getStatusPhrase(int code) {
 
 namespace fs = std::filesystem;
 
-extern std::ofstream logFile;
-
 constexpr int BUFFER_SIZE = 30720;
 
 enum class Method { GET, POST, PATCH, DELETE, HEAD, OPTIONS, PUT, ALL };
 
-std::optional<Method> stringToMethod(const std::string &s);
+std::optional<Method> stringToMethod(std::string_view s);
 
 struct Path {
   Method Type;
@@ -68,7 +77,7 @@ struct Request {
   int contentLength = 0;
 };
 
-std::string contentTypeFromExtension(const std::string &filename);
+std::string contentTypeFromExtension(const std::string filename);
 
 struct Response {
   int statusCode = 200;
@@ -79,8 +88,8 @@ struct Response {
 
   Response &status(int code);
   Response &setHeader(std::string key, std::string value);
-  Response &send(const std::string &text);
-  Response &sendFile(const std::string &filename);
+  Response &send(const std::string text);
+  Response &sendFile(const std::string filename);
 };
 
 using Handler = std::function<void(Request &, Response &)>;
@@ -91,7 +100,7 @@ struct Route {
   Handler handler;
 };
 
-Request parseRequest(const std::string &raw);
+Request parseRequest(const std::string raw);
 
 struct Directory {
   std::string prefix;
@@ -113,33 +122,53 @@ struct Cors {
   std::string prefix = "/";
 };
 
+struct Server;
+
+class ServerPlugin {
+public:
+  std::string prefix = "/";
+  Method allowedMethods = Method::ALL;
+  virtual ~ServerPlugin() = default;
+  virtual void onInit(Server &server) {}
+  virtual void onBeforeRequest(Request &req, Response &res) {}
+  virtual void onAfterRequest(Request &req, Response &res) {}
+  virtual void onShutdown(Server &server) {}
+};
+
 struct Server {
+  std::vector<std::unique_ptr<ServerPlugin>> plugins;
+
   int port;
-  bool logsEnabled = false;
   std::vector<Route> routes;
   std::vector<Directory> staticDirs;
   std::vector<Middleware> middlewares;
   std::vector<Cors> corsOptions;
 
-  Server(int port = 0, bool logsEnabled = false)
-      : port(port), logsEnabled(logsEnabled) {}
+  explicit Server(int port = 0) : port(port) {}
 
-  void get(std::string path, Handler handler);
-  void post(std::string path, Handler handler);
-  void patch(std::string path, Handler handler);
-  void delete_(std::string path, Handler handler);
-  void put(std::string path, Handler handler);
-  void head(std::string path, Handler handler);
-  void options(std::string path, Handler handler);
+  void get(std::string path, const Handler handler);
+  void post(std::string path, const Handler handler);
+  void patch(std::string path, const Handler handler);
+  void delete_(std::string path, const Handler handler);
+  void put(std::string path, const Handler handler);
+  void head(std::string path, const Handler handler);
+  void options(std::string path, const Handler handler);
   void staticDir(std::string prefix, std::string path);
   void listen(std::function<void()> callback);
-  void use(std::string prefix, Method allowedMethods,
+  void use(const std::string prefix, Method allowedMethods,
            std::function<void(Request &, Response &, NextHandler)> handle);
-  void cors(std::string prefix = "/", std::string allowedOrigins = "*",
+  void cors(const std::string prefix = "/",
+            const std::string allowedOrigins = "*",
             Method allowedMethods = Method::ALL);
 
+  void registerPlugin(std::unique_ptr<ServerPlugin> plugin) {
+    plugin->onInit(*this);
+    plugins.push_back(std::move(plugin));
+  }
+  std::atomic<int> server_fd_ = -1;
+
 private:
-  void handleConnection(const std::string &raw, int client_fd);
+  void handleConnection(const std::string raw, int client_fd);
   ThreadPool pool{4};
 };
 
@@ -147,7 +176,7 @@ namespace server {
 
   extern std::vector<int> activePorts;
 
-  Server createServer(int port, bool logsEnabled = false);
+  Server createServer(int port);
 
 }
 
