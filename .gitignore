@@ -2,6 +2,7 @@
 .vscode/
 *.swp
 .DS_Store
+.cache
 
 # build files
 build/
@@ -9,6 +10,6 @@ build/
 # logs
 log.txt
 
-# Not files
+# !Not files
 !src
 !include

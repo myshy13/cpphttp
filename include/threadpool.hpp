@@ -2,7 +2,6 @@
 
 #include <condition_variable>
 #include <functional>
-#include <iostream>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -10,48 +9,67 @@
 
 class ThreadPool {
 public:
-  ThreadPool(size_t threads) : stop(false) {
+  explicit ThreadPool(size_t threads) : stop_(false) {
+    workers_.reserve(threads);
+
     for (size_t i = 0; i < threads; ++i) {
-      workers.emplace_back([this] {
+      workers_.emplace_back([this] {
         while (true) {
           std::function<void()> task;
+
           {
-            std::unique_lock<std::mutex> lock(this->queue_mutex);
-            this->condition.wait(
-                lock, [this] { return this->stop || !this->tasks.empty(); });
-            if (this->stop && this->tasks.empty())
+            std::unique_lock<std::mutex> lock(mutex_);
+
+            condition_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
+
+            if (stop_ && tasks_.empty())
               return;
-            task = std::move(this->tasks.front());
-            this->tasks.pop();
+
+            task = std::move(tasks_.front());
+            tasks_.pop();
           }
+
           task();
         }
       });
     }
   }
 
+  ThreadPool(const ThreadPool &) = delete;
+  ThreadPool &operator=(const ThreadPool &) = delete;
+
   void enqueue(std::function<void()> task) {
     {
-      std::unique_lock<std::mutex> lock(queue_mutex);
-      tasks.push(task);
+      std::lock_guard<std::mutex> lock(mutex_);
+      tasks_.push(std::move(task));
     }
-    condition.notify_one();
+    condition_.notify_one();
   }
 
-  ~ThreadPool() {
+  void stop() {
     {
-      std::unique_lock<std::mutex> lock(queue_mutex);
-      stop = true;
+      std::lock_guard<std::mutex> lock(mutex_);
+      stop_ = true;
     }
-    condition.notify_all();
-    for (std::thread &worker : workers)
-      worker.join();
+
+    condition_.notify_all();
+
+    for (auto &t : workers_) {
+      if (t.joinable()) {
+        t.join();
+      }
+    }
+
+    workers_.clear();
   }
+
+  ~ThreadPool() { stop(); }
 
 private:
-  std::vector<std::thread> workers;
-  std::queue<std::function<void()>> tasks;
-  std::mutex queue_mutex;
-  std::condition_variable condition;
-  bool stop;
+  std::vector<std::thread> workers_;
+  std::queue<std::function<void()>> tasks_;
+
+  std::mutex mutex_;
+  std::condition_variable condition_;
+  bool stop_;
 };
