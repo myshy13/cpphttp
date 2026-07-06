@@ -1,5 +1,6 @@
 #pragma once
 
+#include "colors.hpp"
 #include <arpa/inet.h>
 #include <cstring>
 #include <iostream>
@@ -80,7 +81,9 @@ static std::string makeRequest(
 static bool checkResponse(const std::string &response,
                           const std::string &expected, const char *label) {
   bool passed = response.find(expected) != std::string::npos;
-  std::cout << "[" << (passed ? "PASS" : "FAIL") << "] " << label << std::endl;
+  std::cout << (passed ? Colors::BRIGHT_GREEN + "[PASS] "
+                       : Colors::BRIGHT_RED + "[FAIL] ")
+            << Colors::NC << label << std::endl;
   if (!passed) {
     std::cout << "  Expected substring: " << expected << std::endl;
     std::cout << "  Actual response: " << response << std::endl;

@@ -98,6 +98,13 @@ int main() {
   allPassed &= checkResponse(options, "HTTP/1.1", "OPTIONS / response");
   allPassed &= checkResponse(options, "Access-Control-Allow-Origin", "CORS header");
 
+  std::stringstream expectedResponse;
+  expectedResponse << "KEY: " << "apple" << "\n";
+  expectedResponse << "VALUE: " << "banana" << "\n";
+
+  std::string route = makeRequest(port, "GET", "/echo/apple/banana");
+  allPassed &= checkResponse(route, expectedResponse.str(), "Dynamic routing");
+
   if (allPassed) {
     std::cout << "All tests passed." << std::endl;
   } else {
