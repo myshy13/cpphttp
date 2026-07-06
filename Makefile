@@ -14,7 +14,7 @@ GREEN := $(tput setaf 2)
 .PHONY: test clean
 
 test:
-	$(CXX) $(CXXFLAGS) $(LIB_SRCS) -o testout && ./testout && rm -rf testout
+	$(CXX) $(CXXFLAGS) $(LIB_SRCS) -o testout && ./testout; rm -rf testout
 
 clean:
 	rm -f testout

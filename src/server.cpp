@@ -77,8 +77,6 @@ void Server::handleConnection(const std::string raw, int client_fd) {
   Request req = parseRequest(raw);
   Response res;
 
-  req.startTime = std::chrono::steady_clock::now();
-
   std::string clientIp = "unknown";
   sockaddr_in peerAddr{};
   socklen_t peerLen = sizeof(peerAddr);
@@ -172,7 +170,7 @@ void Server::handleConnection(const std::string raw, int client_fd) {
       if (req.path.find(plugin->prefix) == 0 &&
           (plugin->allowedMethods == Method::ALL ||
            plugin->allowedMethods == stringToMethod(req.method))) {
-        plugin->onBeforeRequest(req, res, startTime);
+        plugin->onBeforeRequest(req, res);
       }
     }
 
@@ -243,13 +241,11 @@ void Server::handleConnection(const std::string raw, int client_fd) {
     runMiddlewares(0, req, res);
   }
 
-  auto duration = std::chrono::steady_clock::now() - req.startTime;
-
   for (auto &plugin : plugins) {
     if (req.path.find(plugin->prefix) == 0 &&
         (plugin->allowedMethods == Method::ALL ||
          plugin->allowedMethods == stringToMethod(req.method))) {
-      plugin->onAfterRequest(req, res, duration);
+      plugin->onAfterRequest(req, res);
     }
   }
 
