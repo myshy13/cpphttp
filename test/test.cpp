@@ -1,11 +1,13 @@
 
 #include "test.hpp"
+#include "plugin.hpp"
 #include "server.hpp"
 #include <arpa/inet.h>
 #include <atomic>
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <netdb.h>
 #include <sstream>
 #include <string>
@@ -15,12 +17,14 @@
 #include <unistd.h>
 
 int main() {
+  bool allPassed = true;
   const int port = 8000;
   Server app = server::createServer(port);
   if (app.port == -1) {
     return 1;
   }
 
+  app.registerPlugin(std::make_unique<TestPlugin>(allPassed));
   Router router = server::createRouter();
 
   router.get("/router", [](Request &, Response &res) {
@@ -28,6 +32,10 @@ int main() {
   });
 
   app.cors("/", "*", Method::ALL);
+
+  app.use("/plugin", Method::ALL, [](Request &req, Response &, NextHandler) {
+    req.context.set("apple", "banana");
+  });
 
   app.get("/", [](Request &, Response &res) {
     res.status(200).send("This is my c++ server!");
@@ -84,8 +92,6 @@ int main() {
     return 1;
   }
 
-  bool allPassed = true;
-
   std::string root = makeRequest(port, "GET", "/");
   allPassed &= checkResponse(root, "HTTP/1.1 200", "GET / status code");
   allPassed &= checkResponse(root, "This is my c++ server!", "GET / response body");
@@ -117,6 +123,8 @@ int main() {
 
   std::string routerRequest = makeRequest(port, "GET", "/router");
   allPassed &= checkResponse(routerRequest, "this is a router!", "Router");
+
+  makeRequest(port, "GET", "/plugin");
 
   if (allPassed) {
     std::cout << "All tests passed." << std::endl;
