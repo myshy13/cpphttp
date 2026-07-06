@@ -6,20 +6,120 @@
 #include <arpa/inet.h>
 #include <atomic>
 #include <cerrno>
-#include <chrono>
 #include <csignal>
 #include <cstring>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <netinet/in.h>
 #include <nlohmann/json.hpp>
-#include <optional>
 #include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+
+struct Server;
+struct Request;
+struct Response;
+
+// ===================== HTTP types =====================
+
+enum class Method { GET, POST, PATCH, DELETE, HEAD, OPTIONS, PUT, ALL };
+
+enum class ContentType { Text, Json, UrlEncoded, Binary };
+
+constexpr int BUFFER_SIZE = 30720;
+
+// ===================== server plugin =====================
+
+class PluginContext {
+private:
+  std::map<std::string, std::any> data_;
+
+public:
+  template <typename T> void set(const std::string &key, const T &value) {
+    data_[key] = value;
+  }
+
+  // Overload for C-string literals to store as std::string for compatibility
+  void set(const std::string &key, const char *value) {
+    data_[key] = std::string(value);
+  }
+
+  template <typename T> bool get(const std::string &key, T &result_out) const {
+    auto it = data_.find(key);
+    if (it == data_.end())
+      return false;
+    try {
+      result_out = std::any_cast<T>(it->second);
+      return true;
+    } catch (const std::bad_any_cast &e) {
+      std::cerr << "Type mismatch retrieving context key: " << key << std::endl;
+      return false;
+    }
+  }
+
+  template <typename T> T *get_mutable(const std::string &key) {
+    auto it = data_.find(key);
+    if (it == data_.end())
+      return nullptr;
+    return std::any_cast<T>(&it->second);
+  }
+};
+
+class ServerPlugin {
+public:
+  std::string prefix = "/";
+  Method allowedMethods = Method::ALL;
+
+  virtual ~ServerPlugin() = default;
+
+  virtual void onInit(Server &) {}
+  virtual void onBeforeRequest(Request &, Response &) {}
+  virtual void onAfterRequest(Request &, Response &) {}
+  virtual void onShutdown(Server &) {}
+};
+
+// ===================== request/response =====================
+
+using FormData = std::unordered_map<std::string, std::string>;
+
+struct Request {
+  std::string method;
+  std::string path;
+  std::string version;
+  std::unordered_map<std::string, std::string> params;
+
+  std::unordered_map<std::string, std::string> headers;
+
+  std::string ip;
+  ContentType contentType;
+
+  std::variant<std::string, std::vector<uint8_t>, nlohmann::json, FormData,
+               const char *>
+      body;
+
+  int contentLength = 0;
+
+  PluginContext context;
+};
+
+struct Response {
+  int statusCode = 200;
+  std::string body;
+
+  std::unordered_map<std::string, std::string> headers = {
+      {"Content-Type", "text/plain"}};
+
+  Response &status(int code);
+  Response &setHeader(std::string key, std::string value);
+  Response &send(const std::string text);
+  Response &sendFile(const std::string filename);
+};
+
+// get parameters (dynamic routing)
 
 inline std::vector<std::string> split(const std::string &s, char delimiter) {
   std::vector<std::string> tokens;
@@ -143,27 +243,9 @@ inline std::vector<Server*> activeServers;
 
 inline std::atomic<bool> shutdownRequested{false};
 
-// ===================== time types =====================
-
-using TimePoint = std::chrono::steady_clock::time_point;
-using Duration  = std::chrono::nanoseconds;
-
-// ===================== HTTP types =====================
-
-enum class Method {
-  GET, POST, PATCH, DELETE, HEAD, OPTIONS, PUT, ALL
-};
-
-enum class ContentType {
-  Text, Json, UrlEncoded, Binary
-};
-
-constexpr int BUFFER_SIZE = 30720;
-
-
 // ===================== helpers =====================
 
-inline std::optional<Method> stringToMethod(std::string_view s) {
+inline Method stringToMethod(std::string_view s) {
   static const std::unordered_map<std::string_view, Method> table = {
       {"GET", Method::GET},
       {"POST", Method::POST},
@@ -177,7 +259,7 @@ inline std::optional<Method> stringToMethod(std::string_view s) {
   if (auto it = table.find(s); it != table.end())
     return it->second;
 
-  return std::nullopt;
+  return Method::GET;
 }
 
 inline std::string methodToString(Method method) {
@@ -202,47 +284,6 @@ inline std::string getStatusPhrase(int code) {
     default: return "OK";
   }
 }
-
-// ===================== request/response =====================
-
-using FormData = std::unordered_map<std::string, std::string>;
-
-struct Request {
-  std::string method;
-  std::string path;
-  std::string version;
-  std::unordered_map<std::string, std::string> params;
-
-  std::unordered_map<std::string, std::string> headers;
-
-  std::string ip;
-  ContentType contentType;
-
-  std::variant<
-    std::string,
-    std::vector<uint8_t>,
-    nlohmann::json,
-    FormData,
-    const char*
-  > body;
-
-  int contentLength = 0;
-  TimePoint startTime;
-};
-
-struct Response {
-  int statusCode = 200;
-  std::string body;
-
-  std::unordered_map<std::string, std::string> headers = {
-    {"Content-Type", "text/plain"}
-  };
-
-  Response& status(int code);
-  Response& setHeader(std::string key, std::string value);
-  Response& send(const std::string text);
-  Response& sendFile(const std::string filename);
-};
 
 // ===================== routing =====================
 
@@ -273,21 +314,6 @@ struct Cors {
   std::string allowedOrigins = "*";
   Method allowedMethods = Method::ALL;
   std::string prefix = "/";
-};
-
-// ===================== server plugin =====================
-
-class ServerPlugin {
-public:
-  std::string prefix = "/";
-  Method allowedMethods = Method::ALL;
-
-  virtual ~ServerPlugin() = default;
-
-  virtual void onInit(Server&) {}
-  virtual void onBeforeRequest(Request&, Response&, TimePoint) {}
-  virtual void onAfterRequest(Request&, Response&, Duration) {}
-  virtual void onShutdown(Server&) {}
 };
 
 // ===================== server =====================
