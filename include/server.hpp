@@ -294,6 +294,16 @@ public:
 
 struct Router {
   std::vector<Route> routes;
+  std::vector<Directory> staticDirs;
+
+  void get(std::string path, Handler handler);
+  void post(std::string path, Handler handler);
+  void patch(std::string path, Handler handler);
+  void delete_(std::string path, Handler handler);
+  void put(std::string path, Handler handler);
+  void head(std::string path, Handler handler);
+  void options(std::string path, Handler handler);
+  void staticDir(std::string prefix, std::string path);
 };
 
 struct Server {

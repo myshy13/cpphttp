@@ -36,6 +36,59 @@ int main() {
 }
 ```
 
+## Advanced Routing with Router
+
+For applications requiring complex resource mapping or middleware
+  stacking, introduce a `Router` instance. The `cpphttp::Server` now supports mounting this custom router using
+  `server::use(router)`. This pattern decouples high-level routing logic from the core server loop, leading to cleaner, modular
+  services.
+
+### Example: Defining and Using a Router
+
+```cpp
+#include "server.hpp"
+#include <iostream>
+
+// 1. Define a
+  custom router implementation (implementation details omitted for brevity)
+class MyRouter : public Router {
+public:
+    void
+  setupRoutes(Server& server) override {
+        // Example: setting up a specific path handler on the router instance itself
+
+      server.get("/api/v1/users", [](Request &req, Response &res) {
+            res.json({"status": "ok", "message":
+  "Fetching all users via custom Router!"});
+        });
+    }
+};
+
+int main() {
+  const int port = 8080;
+  Server app =
+  server::createServer(port);
+
+  // 2. Create and register the router with the server
+  MyRouter userApiRouter;
+
+  app.use(userApiRouter); // <--- New feature in action!
+
+  if (app.port == -1) {
+    return 1;
+  }
+
+  app.listen([=]()->void
+  {
+    std::cout << "listening on: http://localhost:";
+    std::cout << port << std::endl;
+  });
+}
+```
+*(Note: The
+  `Router` class and its implementation details would reside in their own files, which are assumed to be available to the
+  compiler.)*
+
 ## Requirements
 
 | Requirement | version        |
@@ -43,21 +96,8 @@ int main() {
 | c++ version | >C++17         |
 | Compiler    | clang++ or g++ |
 
-You can use other compilers, but clang++ or g++ are recommended compilers for this library.
+You can use other compilers, but clang++ or g++ are recommended compilers for this
+  library.
 If you are on windows, use Visual studio to compile your code.
 
-> 💡 **Tip:** \*If you are using one of the recommended compilers, you can use the following argument to tell the compiler to use C++17: `-std=c++17` to make it permanent, run this command depending on your compiler:
->
-> ```shell
-> function g++() {
->     command /usr/bin/g++ -std=c++17 "$@"
-> }
-> ```
->
-> ```shell
-> function clang++() {
->     command /usr/bin/clang++ -std=c++17 "$@"
-> }
-> ```
-
-## Changelog
+> 💡 **Tip:** *

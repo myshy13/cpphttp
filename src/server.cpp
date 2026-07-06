@@ -366,6 +366,39 @@ void Server::cors(const std::string prefix, const std::string allowedOrigins,
   corsOptions.push_back({allowedOrigins, allowedMethods, prefix});
 }
 
+// ===================== Router routing :) ===================
+void Router::get(std::string path, Handler handler) {
+  routes.push_back({Method::GET, path, handler});
+}
+
+void Router::post(std::string path, Handler handler) {
+  routes.push_back({Method::POST, path, handler});
+}
+
+void Router::patch(std::string path, Handler handler) {
+  routes.push_back({Method::PATCH, path, handler});
+}
+
+void Router::delete_(std::string path, Handler handler) {
+  routes.push_back({Method::DELETE, path, handler});
+}
+
+void Router::put(std::string path, Handler handler) {
+  routes.push_back({Method::PUT, path, handler});
+}
+
+void Router::head(std::string path, Handler handler) {
+  routes.push_back({Method::HEAD, path, handler});
+}
+
+void Router::options(std::string path, Handler handler) {
+  routes.push_back({Method::OPTIONS, path, handler});
+}
+
+void Router::staticDir(std::string prefix, std::string path) {
+  staticDirs.push_back({prefix, path});
+}
+
 // ===================== stop logic =====================
 void Server::requestStop() {
   running_ = false;
@@ -476,7 +509,11 @@ void Server::use(
 }
 
 void Server::use(const Router &router) {
-  for (const auto &route : router.routes) {
+  for (const Route &route : router.routes) {
     routes.push_back(route);
+  }
+
+  for (const Directory &staticDir : router.staticDirs) {
+    staticDirs.push_back(staticDir);
   }
 }
