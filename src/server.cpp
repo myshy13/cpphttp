@@ -322,10 +322,13 @@ Server::Server(int port) : port(port) {
   activeServers.push_back(this);
 }
 
+// ==================== Server and router ====================
+
 Server server::createServer(int port) { return Server(port); }
 
-// route helpers
+Router server::createRouter() { return Router(); }
 
+// ==================== route helpers ====================
 void Server::get(std::string path, Handler handler) {
   routes.push_back({Method::GET, path, handler});
 }

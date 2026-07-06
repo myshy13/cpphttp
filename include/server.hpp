@@ -292,6 +292,10 @@ public:
 
 // ===================== server =====================
 
+struct Router {
+  std::vector<Route> routes;
+};
+
 struct Server {
   Server();
   explicit Server(int port);
@@ -354,6 +358,7 @@ inline void handleSignal(int) {
 
 namespace server {
   Server createServer(int port);
+  Router createRouter();
 }
 
 #endif
