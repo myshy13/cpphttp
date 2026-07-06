@@ -21,6 +21,12 @@ int main() {
     return 1;
   }
 
+  Router router = server::createRouter();
+
+  router.get("/router", [](Request &, Response &res) {
+    res.status(200).send("this is a router!");
+  });
+
   app.cors("/", "*", Method::ALL);
 
   app.get("/", [](Request &, Response &res) {
@@ -55,6 +61,8 @@ int main() {
 
     res.status(200).send(ss.str());
   });
+
+  app.use(router);
 
   std::atomic<bool> serverReady(false);
   std::thread serverThread([&]() {
@@ -96,14 +104,19 @@ int main() {
 
   std::string options = makeRequest(port, "OPTIONS", "/");
   allPassed &= checkResponse(options, "HTTP/1.1", "OPTIONS / response");
-  allPassed &= checkResponse(options, "Access-Control-Allow-Origin", "CORS header");
+  allPassed &=
+      checkResponse(options, "Access-Control-Allow-Origin", "CORS header");
 
   std::stringstream expectedResponse;
   expectedResponse << "KEY: " << "apple" << "\n";
   expectedResponse << "VALUE: " << "banana" << "\n";
 
   std::string route = makeRequest(port, "GET", "/echo/apple/banana");
-  allPassed &= checkResponse(route, expectedResponse.str(), "Dynamic routing");
+  allPassed &=
+      checkResponse(route, expectedResponse.str(), "Routing parameters");
+
+  std::string routerRequest = makeRequest(port, "GET", "/router");
+  allPassed &= checkResponse(routerRequest, "this is a router!", "Router");
 
   if (allPassed) {
     std::cout << "All tests passed." << std::endl;
