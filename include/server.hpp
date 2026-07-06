@@ -13,13 +13,126 @@
 #include <memory>
 #include <mutex>
 #include <netinet/in.h>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
-#include <nlohmann/json.hpp>
+
+inline std::vector<std::string> split(const std::string &s, char delimiter) {
+  std::vector<std::string> tokens;
+  std::stringstream ss(s);
+  std::string token;
+
+  while (std::getline(ss, token, delimiter)) {
+    tokens.push_back(token);
+  }
+
+  return tokens;
+}
+
+/**
+ * @brief Compares the parameterized route template against the actual request
+ * path to extract parameter names and assign them values.
+ *
+ * @param route The path template (e.g., /api/v1/:key/:value)
+ * @param request The concrete URL received (e.g., /api/v1/that/this)
+ * @return std::unordered_map<std::string, std::string> A map of parameter names
+ * to values.
+ */
+inline std::unordered_map<std::string, std::string>
+getParams(const std::string &route, const std::string &request) {
+  std::unordered_map<std::string, std::string> param_map;
+
+  // 1. Tokenize both paths
+  std::vector<std::string> route_segments = split(route, '/');
+  std::vector<std::string> request_segments = split(request, '/');
+
+  // The loop should run up to the length of the shorter path array
+  // to prevent out-of-bounds errors.
+  size_t limit = std::min(route_segments.size(), request_segments.size());
+
+  // 2. Iterate and compare segments
+  for (size_t i = 0; i < limit; ++i) {
+    const std::string &route_segment = route_segments[i];
+    const std::string &request_segment = request_segments[i];
+
+    // Check if the segment in the ROUTE starts with a parameter marker (':')
+    if (!route_segment.empty() && route_segment[0] == ':') {
+
+      // This is a parameterized slot (e.g., ":key")
+
+      // Extract the param name by removing the leading ':'
+      std::string param_name = route_segment.substr(1);
+
+      // The actual value must be the corresponding request segment.
+      // We only map it if the request segment is not empty (e.g., handling
+      // trailing slashes)
+      if (!request_segment.empty()) {
+        // Store in the map: Key = param name, Value = request segment content
+        param_map[param_name] = request_segment;
+      }
+    }
+  }
+
+  return param_map;
+}
+
+/**
+ * @brief Determines if the request path structurally matches the route
+ * template.
+ *
+ * This function performs a segment-by-segment comparison, allowing for
+ * parameters (segments starting with ':'). It also ensures all segments match
+ * in length.
+ *
+ * NOTE: The params are extracted and stored in req BEFORE this check is needed
+ * in your main loop, but we re-run the logic here to make it self-contained.
+ */
+inline bool isStructuralMatch(const std::string &route_path,
+                              const std::string &request_path) {
+  std::vector<std::string> route_segments = split(route_path, '/');
+  std::vector<std::string> request_segments = split(request_path, '/');
+
+  // 1. Check length equality (A strict router requires paths to have the same
+  // number of segments)
+  if (route_segments.size() != request_segments.size()) {
+    return false;
+  }
+
+  // 2. Segment-by-Segment Comparison
+  for (size_t i = 0; i < route_segments.size(); ++i) {
+    const std::string &r_segment = route_segments[i];
+    const std::string &q_segment = request_segments[i];
+
+    // Skip empty segments if your split function creates them (this is common
+    // in URL parsing)
+    if (r_segment.empty() && q_segment.empty()) {
+      continue;
+    }
+
+    // A) Check for Dynamic Match (The Fix!)
+    // Does the route segment start with ':', indicating a parameter slot?
+    if (!r_segment.empty() && r_segment[0] == ':') {
+      // This always matches structurally, because that's the point of
+      // parameters.
+      continue;
+    }
+
+    // B) Check for Exact Match (Static segment)
+    if (r_segment != q_segment) {
+      // If it is a static segment and the strings do not match, the paths do
+      // NOT align.
+      return false;
+    }
+  }
+
+  // If we get here, every segment either matched exactly OR was correctly
+  // handled as a dynamic parameter.
+  return true;
+}
 
 struct Server;
 
@@ -98,6 +211,7 @@ struct Request {
   std::string method;
   std::string path;
   std::string version;
+  std::unordered_map<std::string, std::string> params;
 
   std::unordered_map<std::string, std::string> headers;
 

@@ -1,9 +1,10 @@
 #include "server.hpp"
 
-#include <mutex>
-#include <sstream>
 #include <fstream>
 #include <iostream>
+#include <mutex>
+#include <sstream>
+#include <string>
 
 inline std::mutex logMutex;
 
@@ -16,22 +17,14 @@ Request parseRequest(const std::string raw);
 
 std::string contentTypeFromExtension(const std::string filename) {
   static const std::unordered_map<std::string, std::string> mimeTypes = {
-      {".html", "text/html"},
-      {".htm", "text/html"},
-      {".css", "text/css"},
-      {".js", "application/javascript"},
-      {".json", "application/json"},
-      {".png", "image/png"},
-      {".jpg", "image/jpeg"},
-      {".jpeg", "image/jpeg"},
-      {".gif", "image/gif"},
-      {".svg", "image/svg+xml"},
-      {".txt", "text/plain"},
-      {".ico", "image/x-icon"},
-      {".pdf", "application/pdf"},
-      {".xml", "application/xml"},
-      {".zip", "application/zip"},
-      {".mp3", "audio/mpeg"},
+      {".html", "text/html"},        {".htm", "text/html"},
+      {".css", "text/css"},          {".js", "application/javascript"},
+      {".json", "application/json"}, {".png", "image/png"},
+      {".jpg", "image/jpeg"},        {".jpeg", "image/jpeg"},
+      {".gif", "image/gif"},         {".svg", "image/svg+xml"},
+      {".txt", "text/plain"},        {".ico", "image/x-icon"},
+      {".pdf", "application/pdf"},   {".xml", "application/xml"},
+      {".zip", "application/zip"},   {".mp3", "audio/mpeg"},
       {".mp4", "video/mp4"},
   };
 
@@ -47,22 +40,22 @@ std::string contentTypeFromExtension(const std::string filename) {
 
 // ===================== response =====================
 
-Response& Response::status(int code) {
+Response &Response::status(int code) {
   statusCode = code;
   return *this;
 }
 
-Response& Response::setHeader(std::string key, std::string value) {
+Response &Response::setHeader(std::string key, std::string value) {
   headers[key] = value;
   return *this;
 }
 
-Response& Response::send(const std::string text) {
+Response &Response::send(const std::string text) {
   body = text;
   return *this;
 }
 
-Response& Response::sendFile(const std::string filename) {
+Response &Response::sendFile(const std::string filename) {
   std::ifstream file(filename);
 
   if (!file.is_open()) {
@@ -90,7 +83,8 @@ void Server::handleConnection(const std::string raw, int client_fd) {
   sockaddr_in peerAddr{};
   socklen_t peerLen = sizeof(peerAddr);
 
-  if (getpeername(client_fd, reinterpret_cast<sockaddr*>(&peerAddr), &peerLen) == 0) {
+  if (getpeername(client_fd, reinterpret_cast<sockaddr *>(&peerAddr),
+                  &peerLen) == 0) {
     char ipBuffer[INET_ADDRSTRLEN];
     if (inet_ntop(AF_INET, &peerAddr.sin_addr, ipBuffer, sizeof(ipBuffer))) {
       clientIp = ipBuffer;
@@ -118,14 +112,12 @@ void Server::handleConnection(const std::string raw, int client_fd) {
 
       if (contentTypeValue.find("application/json") != std::string::npos) {
         req.contentType = ContentType::Json;
-      }
-      else if (contentTypeValue.find("application/x-www-form-urlencoded") != std::string::npos) {
+      } else if (contentTypeValue.find("application/x-www-form-urlencoded") !=
+                 std::string::npos) {
         req.contentType = ContentType::UrlEncoded;
-      }
-      else if (contentTypeValue.find("text/plain") != std::string::npos) {
+      } else if (contentTypeValue.find("text/plain") != std::string::npos) {
         req.contentType = ContentType::Text;
-      }
-      else {
+      } else {
         req.contentType = ContentType::Binary;
       }
     } else {
@@ -141,15 +133,13 @@ void Server::handleConnection(const std::string raw, int client_fd) {
         try {
           nlohmann::json jsonBody = nlohmann::json::parse(bodyStr);
           req.body = jsonBody;
-        }
-        catch (const nlohmann::json::exception& err) {
+        } catch (const nlohmann::json::exception &err) {
           req.body = std::string("Invalid JSON");
 
           std::lock_guard<std::mutex> lock(logMutex);
           std::cerr << "WARNING: " << err.what() << std::endl;
         }
-      }
-      else if (req.contentType == ContentType::UrlEncoded) {
+      } else if (req.contentType == ContentType::UrlEncoded) {
         FormData formData;
         std::istringstream formStream(bodyStr);
         std::string pair;
@@ -164,11 +154,9 @@ void Server::handleConnection(const std::string raw, int client_fd) {
         }
 
         req.body = formData;
-      }
-      else if (req.contentType == ContentType::Text) {
+      } else if (req.contentType == ContentType::Text) {
         req.body = bodyStr;
-      }
-      else {
+      } else {
         std::vector<uint8_t> binaryBody(bodyStr.begin(), bodyStr.end());
         req.body = binaryBody;
       }
@@ -177,10 +165,10 @@ void Server::handleConnection(const std::string raw, int client_fd) {
 
   bool matched = false;
 
-  auto dispatchRequest = [&](Request& req, Response& res) {
+  auto dispatchRequest = [&](Request &req, Response &res) {
     std::chrono::steady_clock::time_point startTime;
 
-    for (auto& plugin : plugins) {
+    for (auto &plugin : plugins) {
       if (req.path.find(plugin->prefix) == 0 &&
           (plugin->allowedMethods == Method::ALL ||
            plugin->allowedMethods == stringToMethod(req.method))) {
@@ -188,16 +176,17 @@ void Server::handleConnection(const std::string raw, int client_fd) {
       }
     }
 
-    for (auto& route : routes) {
-      if (route.path == req.path &&
+    for (auto &route : routes) {
+      if (isStructuralMatch(route.path, req.path) &&
           route.method == stringToMethod(req.method)) {
+        req.params = getParams(route.path, req.path);
         route.handler(req, res);
         matched = true;
         return;
       }
     }
 
-    for (auto& dir : staticDirs) {
+    for (auto &dir : staticDirs) {
       if (req.path.find(dir.prefix) == 0) {
         try {
           if (fs::exists(dir.path) && fs::is_directory(dir.path)) {
@@ -213,8 +202,7 @@ void Server::handleConnection(const std::string raw, int client_fd) {
               res.status(404).send("Not Found");
             }
           }
-        }
-        catch (const fs::filesystem_error& err) {
+        } catch (const fs::filesystem_error &err) {
           std::lock_guard<std::mutex> lock(logMutex);
           std::cerr << "ERROR: FS filesystem error: " << err.what() << "\n";
         }
@@ -226,7 +214,7 @@ void Server::handleConnection(const std::string raw, int client_fd) {
 
   std::vector<std::reference_wrapper<const Middleware>> activeMiddlewares;
 
-  for (const auto& middleware : middlewares) {
+  for (const auto &middleware : middlewares) {
     if (req.path.find(middleware.prefix) == 0 &&
         (middleware.allowedMethods == Method::ALL ||
          middleware.allowedMethods == stringToMethod(req.method))) {
@@ -234,17 +222,17 @@ void Server::handleConnection(const std::string raw, int client_fd) {
     }
   }
 
-  std::function<void(size_t, Request&, Response&)> runMiddlewares;
+  std::function<void(size_t, Request &, Response &)> runMiddlewares;
 
-  runMiddlewares = [&](size_t index, Request& req, Response& res) {
+  runMiddlewares = [&](size_t index, Request &req, Response &res) {
     if (index >= activeMiddlewares.size()) {
       dispatchRequest(req, res);
       return;
     }
 
-    const Middleware& middleware = activeMiddlewares[index].get();
+    const Middleware &middleware = activeMiddlewares[index].get();
 
-    middleware.handle(req, res, [&](Request& req, Response& res) {
+    middleware.handle(req, res, [&](Request &req, Response &res) {
       runMiddlewares(index + 1, req, res);
     });
   };
@@ -257,7 +245,7 @@ void Server::handleConnection(const std::string raw, int client_fd) {
 
   auto duration = std::chrono::steady_clock::now() - req.startTime;
 
-  for (auto& plugin : plugins) {
+  for (auto &plugin : plugins) {
     if (req.path.find(plugin->prefix) == 0 &&
         (plugin->allowedMethods == Method::ALL ||
          plugin->allowedMethods == stringToMethod(req.method))) {
@@ -269,7 +257,7 @@ void Server::handleConnection(const std::string raw, int client_fd) {
     res.status(404).send("Not Found");
   }
 
-  for (auto& cors : corsOptions) {
+  for (auto &cors : corsOptions) {
     if (req.path.find(cors.prefix) == 0) {
       res.headers["Access-Control-Allow-Origin"] = cors.allowedOrigins;
       res.headers["Access-Control-Allow-Methods"] =
@@ -279,20 +267,18 @@ void Server::handleConnection(const std::string raw, int client_fd) {
 
   std::string headers;
 
-  for (const auto& [key, value] : res.headers) {
+  for (const auto &[key, value] : res.headers) {
     headers += key + ": " + value + "\r\n";
   }
 
   std::string response =
       "HTTP/1.1 " + std::to_string(res.statusCode) + " " +
       getStatusPhrase(res.statusCode) +
-      "\r\nContent-Length: " + std::to_string(res.body.size()) +
-      "\r\n" + headers +
-      "Connection: close\r\n\r\n" + res.body;
+      "\r\nContent-Length: " + std::to_string(res.body.size()) + "\r\n" +
+      headers + "Connection: close\r\n\r\n" + res.body;
 
   send(client_fd, response.c_str(), response.size(), 0);
 }
-
 
 Request parseRequest(const std::string raw) {
   Request req;
@@ -307,7 +293,8 @@ Request parseRequest(const std::string raw) {
 
   while (std::getline(stream, line) && !line.empty() && line != "\r") {
     auto colon = line.find(':');
-    if (colon == std::string::npos) continue;
+    if (colon == std::string::npos)
+      continue;
 
     std::string key = line.substr(0, colon);
     std::string value = line.substr(colon + 2);
@@ -335,9 +322,7 @@ Server::Server(int port) : port(port) {
   activeServers.push_back(this);
 }
 
-Server server::createServer(int port) {
-  return Server(port);
-}
+Server server::createServer(int port) { return Server(port); }
 
 // route helpers
 
@@ -373,8 +358,7 @@ void Server::staticDir(std::string prefix, std::string path) {
   staticDirs.push_back({prefix, path});
 }
 
-void Server::cors(const std::string prefix,
-                  const std::string allowedOrigins,
+void Server::cors(const std::string prefix, const std::string allowedOrigins,
                   Method allowedMethods) {
   corsOptions.push_back({allowedOrigins, allowedMethods, prefix});
 }
@@ -394,7 +378,7 @@ void Server::requestStop() {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
+    if (connect(sock, (sockaddr *)&addr, sizeof(addr)) < 0) {
       // ignore errors; this is only to wake accept()
     }
     close(sock);
@@ -407,7 +391,8 @@ void Server::listen(std::function<void()> callback) {
   std::signal(SIGINT, handleSignal);
 
   server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_fd_ < 0) return;
+  if (server_fd_ < 0)
+    return;
 
   int opt = 1;
   setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
@@ -417,7 +402,7 @@ void Server::listen(std::function<void()> callback) {
   addr.sin_addr.s_addr = INADDR_ANY;
   addr.sin_port = htons(port);
 
-  if (bind(server_fd_, (sockaddr*)&addr, sizeof(addr)) < 0)
+  if (bind(server_fd_, (sockaddr *)&addr, sizeof(addr)) < 0)
     return;
 
   if (::listen(server_fd_, 16) < 0)
@@ -429,7 +414,8 @@ void Server::listen(std::function<void()> callback) {
     int client_fd = accept(server_fd_, nullptr, nullptr);
 
     if (client_fd < 0) {
-      if (errno == EINTR) continue;
+      if (errno == EINTR)
+        continue;
       break;
     }
 
@@ -440,7 +426,8 @@ void Server::listen(std::function<void()> callback) {
       while (true) {
         ssize_t n = recv(client_fd, buf.data(), buf.size(), 0);
 
-        if (n <= 0) break;
+        if (n <= 0)
+          break;
 
         request.append(buf.data(), static_cast<size_t>(n));
 
@@ -466,7 +453,7 @@ void Server::listen(std::function<void()> callback) {
 
   pool.stop();
 
-  for (auto& plugin : plugins) {
+  for (auto &plugin : plugins) {
     plugin->onShutdown(*this);
   }
 }
@@ -474,9 +461,8 @@ void Server::listen(std::function<void()> callback) {
 // ===================== middleware =====================
 
 void Server::use(
-    const std::string prefix,
-    Method allowedMethods,
-    std::function<void(Request&, Response&, NextHandler)> handle) {
+    const std::string prefix, Method allowedMethods,
+    std::function<void(Request &, Response &, NextHandler)> handle) {
 
   Middleware m;
   m.prefix = prefix;

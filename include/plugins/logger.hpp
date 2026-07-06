@@ -1,27 +1,48 @@
-#ifndef MYSHY13_FILE_LOGGER_PLUGIN
-#define MYSHY13_FILE_LOGGER_PLUGIN
+#ifndef MYSHY13_LOGGER_PLUGIN
+#define MYSHY13_LOGGER_PLUGIN
 
 #include "server.hpp"
-#include <fstream>
 #include <iostream>
-#include <mutex>
+
+struct LoggerSettings {
+  bool req = true;
+  bool res = false;
+  bool ip = false;
+};
 
 class LoggerPlugin : public ServerPlugin {
+
 public:
+  LoggerPlugin(LoggerSettings s) { settings = s; }
+
   void onBeforeRequest(Request &req, Response &, TimePoint start) override {
     startTime_ = start;
-    std::cout << "[REQ] " << req.method << " " << req.path << "\n";
+    if (settings.req) {
+      std::cout << "[INCOMING] " << req.method << " AT \"" << req.path << "\"";
+    }
+    if (settings.ip) {
+      if (settings.req) {
+        std::cout << " FROM " << req.ip << "\n";
+      } else {
+        std::cout << "[INCOMING] Request from " << req.ip << "\n";
+      }
+    } else {
+      std::cout << "\n";
+    }
   }
 
   void onAfterRequest(Request &req, Response &, Duration duration) override {
     auto ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 
-    std::cout << "[RES] " << req.method << " " << req.path << " took " << ms
-              << "ms\n";
+    if (settings.res) {
+      std::cout << "[RES] " << req.method << " " << req.path << " took " << ms
+                << "ms\n";
+    }
   }
 
 private:
+  LoggerSettings settings = {};
   TimePoint startTime_;
 };
 

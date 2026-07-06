@@ -18,33 +18,22 @@ Here is a boilerplate/ example file to get started.
 #include "server.hpp"
 #include <iostream>
 
-using json = nlohmann::json;
-
-void middleware(Request &req, Response &res, NextHandler next) {
-  std::cout << "Middleware: " << req.method << " " << req.path << "\n";
-  next(req, res);
-}
-
 int main() {
   const int port = 8080;
-  Server app = server::createServer(port, false);
+  Server app = server::createServer(port);
   if (app.port == -1) {
-    std::cerr << "Error binding to port\n";
     return 1;
   }
 
-  app.get("/", [](Request &req, Response &res) {
+  app.get("/", [](Request &, Response &res) {
     res.status(200).send("This is my c++ server!");
   });
 
-  app.use("/", Method::ALL, middleware);
-
-  app.listen([]() {
-    std::cout << "Listening on http://localhost:";
-    std::cout << port << "\n";
+  app.listen([=]()->void {
+    std::cout << "listening on: http://localhost:";
+    std::cout << port << std::endl;
   });
 }
-
 ```
 
 ## Requirements
@@ -52,8 +41,21 @@ int main() {
 | Requirement | version        |
 | ----------- | -------------- |
 | c++ version | >C++17         |
-| compiler    | clang++ or g++ |
+| Compiler    | clang++ or g++ |
 
-You can use other compilers, but clang and g are the recommended compilers for this library.
+You can use other compilers, but clang++ or g++ are recommended compilers for this library.
+If you are on windows, use Visual studio to compile your code.
 
-> 💡 **Tip:** \*If you are using the recommended compilers, you can use the following argument to tell the compiler to use C++17: `-std=c++17`\*
+> 💡 **Tip:** \*If you are using one of the recommended compilers, you can use the following argument to tell the compiler to use C++17: `-std=c++17` to make it permanent, run this command depending on your compiler:
+>
+> ```shell
+> function g++() {
+>     command /usr/bin/g++ -std=c++17 "$@"
+> }
+> ```
+>
+> ```shell
+> function clang++() {
+>     command /usr/bin/clang++ -std=c++17 "$@"
+> }
+> ```

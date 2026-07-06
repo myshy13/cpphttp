@@ -1,6 +1,4 @@
 #include "server.hpp"
-#include "plugins/logger.hpp"
-#include "plugins/timer.hpp"
 #include <iostream>
 
 int main() {
@@ -10,14 +8,9 @@ int main() {
     return 1;
   }
 
-  app.cors("/", "*", Method::ALL);
-
   app.get("/", [](Request &, Response &res) {
     res.status(200).send("This is my c++ server!");
   });
-
-  app.registerPlugin(std::make_unique<LoggerPlugin>());
-  app.registerPlugin(std::make_unique<TimerPlugin>());
 
   app.listen([=]()->void {
     std::cout << "listening on: http://localhost:";
