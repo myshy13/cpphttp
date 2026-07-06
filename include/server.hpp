@@ -325,6 +325,7 @@ struct Server {
   void listen(std::function<void()> callback);
   void use(const std::string prefix, Method allowedMethods,
            std::function<void(Request&, Response&, NextHandler)> handle);
+  void use(const Router &router);
 
   void cors(const std::string prefix = "/",
             const std::string allowedOrigins = "*",

@@ -474,3 +474,9 @@ void Server::use(
 
   middlewares.push_back(m);
 }
+
+void Server::use(const Router &router) {
+  for (const auto &route : router.routes) {
+    routes.push_back(route);
+  }
+}
