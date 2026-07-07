@@ -26,7 +26,7 @@
 - A C++17‑compatible compiler (e.g., `clang++`, `g++`, MSVC).
 - **CMake** ≥ 3.12.
 - `nlohmann_json` library (available via Homebrew `brew install nlohmann-json`, apt `libnlohmann-json-dev`, vcpkg, etc.).
-- POSIX socket support (Linux/macOS). Windows support would need additional work.
+- POSIX socket support (Linux/macOS). Windows support will need additional work.
 
 ## Build & Install
 
@@ -61,7 +61,7 @@ The repository ships a minimal example in `src/main.cpp`. After a successful CMa
 
 You should see output similar to:
 
-```
+```txt
 listening on: http://localhost:8080
 ```
 
@@ -186,19 +186,6 @@ The program prints `[PASS]`/`[FAIL]` messages and exits with status 0 when all
 - Concurrency is limited to a fixed‑size thread pool (`ThreadPool pool{4}` in `Server`).
 
 Feel free to experiment, extend and improve the library.
-
-## License
-
-`cpphttp` is distributed under the MIT License. See the `LICENSE` file for details.
-
-## Contributing
-
-Contributions are welcome! Typical workflow:
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Add tests for any new behaviour.
-4. Open a pull request.
 
 ---
 

@@ -1,4 +1,3 @@
-
 #include "server.hpp"
 #include <iostream>
 
@@ -13,8 +12,10 @@ int main() {
     res.status(200).send("This is my c++ server!");
   });
 
-  app.listen([=]()->void {
-    std::cout << "listening on: http://localhost:";
+  app.secure("cert/server.key", "cert/server.crt");
+
+  app.listen([=]() -> void {
+    std::cout << "listening on: https://localhost:";
     std::cout << port << std::endl;
   });
 }

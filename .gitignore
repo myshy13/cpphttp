@@ -6,6 +6,8 @@
 
 # build files
 build/
+cert/*
+CMakeFiles
 
 # logs
 log.txt
@@ -13,3 +15,4 @@ log.txt
 # !Not files
 !src
 !include
+!cert/info.txt

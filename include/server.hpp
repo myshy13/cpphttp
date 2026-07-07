@@ -14,11 +14,17 @@
 #include <mutex>
 #include <netinet/in.h>
 #include <nlohmann/json.hpp>
+#include <openssl/ssl.h>
 #include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+
+// tls
+class TLSContext;
+
+// predifinition
 
 struct Server;
 struct Request;
@@ -234,8 +240,6 @@ inline bool isStructuralMatch(const std::string &route_path,
   return true;
 }
 
-struct Server;
-
 // ===================== global runtime state =====================
 
 inline std::mutex serverRegistryMutex;
@@ -366,17 +370,20 @@ struct Server {
   void cors(const std::string prefix = "/",
             const std::string allowedOrigins = "*",
             Method allowedMethods = Method::ALL);
-
-  void requestStop();
-
+  void secure(const std::string &privateKeyFile,
+              const std::string &publicCertFile);
   void registerPlugin(std::unique_ptr<ServerPlugin> plugin) {
     plugin->onInit(*this);
     plugins.push_back(std::move(plugin));
   }
 
+  void requestStop();
+~Server();
+
 private:
   ThreadPool pool{4};
-  void handleConnection(const std::string raw, int client_fd);
+  void handleConnection(const std::string &raw, int client_fd, SSL *ssl);
+  std::unique_ptr<TLSContext> tls_;
 };
 
 // ===================== signal =====================
