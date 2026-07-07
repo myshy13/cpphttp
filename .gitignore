@@ -15,4 +15,4 @@ log.txt
 # !Not files
 !src
 !include
-!cert/info.txt
+!cert/info.md

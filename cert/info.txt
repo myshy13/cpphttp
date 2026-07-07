@@ -1,2 +1,0 @@
-PUT YOUR CERT HERE!
-server.crt and server.key
