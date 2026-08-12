@@ -20,13 +20,14 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+#include <variant>
 
 // tls
 class TLSContext;
 
 // predifinition
 
-struct Server;
+class Server;
 struct Request;
 struct Response;
 
@@ -336,21 +337,11 @@ struct Router {
   void staticDir(std::string prefix, std::string path);
 };
 
-struct Server {
+class Server {
+public:
+   int port = 0;
   Server();
   explicit Server(int port);
-
-  std::vector<std::unique_ptr<ServerPlugin>> plugins;
-
-  int port = 0;
-
-  std::vector<Route> routes;
-  std::vector<Directory> staticDirs;
-  std::vector<Middleware> middlewares;
-  std::vector<Cors> corsOptions;
-
-  int server_fd_ = -1;
-  std::atomic<bool> running_{true};
 
   void get(std::string path, Handler handler);
   void post(std::string path, Handler handler);
@@ -381,6 +372,16 @@ struct Server {
 ~Server();
 
 private:
+
+  std::vector<std::unique_ptr<ServerPlugin>> plugins;
+
+  std::vector<Route> routes;
+  std::vector<Directory> staticDirs;
+  std::vector<Middleware> middlewares;
+  std::vector<Cors> corsOptions;
+
+  int server_fd_ = -1;
+  std::atomic<bool> running_{true};
   ThreadPool pool{4};
   void handleConnection(const std::string &raw, int client_fd, SSL *ssl);
   std::unique_ptr<TLSContext> tls_;

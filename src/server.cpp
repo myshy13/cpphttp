@@ -188,10 +188,14 @@ void Server::handleConnection(const std::string &raw, int client_fd,
     }
 
     for (auto &dir : staticDirs) {
+
       if (req.path.find(dir.prefix) == 0) {
         try {
           if (fs::exists(dir.path) && fs::is_directory(dir.path)) {
             std::string relPath = req.path.substr(dir.prefix.length());
+            if (!relPath.empty() && relPath[0] == '/') {
+              relPath.erase(0, 1);
+            }
             fs::path safePath = fs::path(dir.path) / relPath;
 
             if (fs::exists(safePath) && fs::is_regular_file(safePath)) {
@@ -199,8 +203,19 @@ void Server::handleConnection(const std::string &raw, int client_fd,
                   contentTypeFromExtension(safePath.string());
               res.sendFile(safePath.string());
               matched = true;
+            } else if (relPath.empty()) {
+              fs::path indexPath = fs::path(dir.path) / "index.html";
+              if (fs::exists(indexPath) && fs::is_regular_file(indexPath)) {
+                res.headers["Content-Type"] =
+                    contentTypeFromExtension(indexPath.string());
+                res.sendFile(indexPath.string());
+              } else {
+                res.status(404).send("Not Found");
+              }
+              matched = true;
             } else {
               res.status(404).send("Not Found");
+              matched = true;
             }
           }
         } catch (const fs::filesystem_error &err) {
